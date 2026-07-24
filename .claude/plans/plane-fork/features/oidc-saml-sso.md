@@ -52,3 +52,34 @@ Zitadel end-to-end on `projects.woven`; (6) SAML ACS flow (separate bead, deferr
 4 shared files (`oauth.py`, `error.py`, `urls.py`, `instance.py`) — mark each `# woven:`.
 Upstream may later add its own OIDC; namespace ours to avoid collision. SAML dependency
 (`python3-saml`/`xmlsec`) adds native build deps to the image.
+
+---
+
+## Build-ready slice (executable — child beads under `plane-bbt`)
+
+**Branch:** `woven/oidc-sso` off tag **`v1.3.1`** (D-BASE). Gate behind the existing
+`InstanceConfiguration` **`IS_OIDC_ENABLED`** key — SSO is standalone, **no F0.1 dependency**.
+
+| # | Bead | Scope | Done when |
+|---|------|-------|-----------|
+| 1 | `plane-07r` *(ready)* | `OIDCOAuthProvider` (clone `gitea.py`): discovery/`OIDC_URL_*`, `sub`→`provider_id`, verified-email guard | unit: token+userinfo parse; unverified email rejected |
+| 2 | `plane-1f2` | app+space views + `urls.py` + `error.py`/`oauth.py` codes | `GET /auth/oidc/` 302s to Zitadel; callback errors mapped |
+| 3 | `plane-4cr` | `oidc_config_variables` + `IS_OIDC_ENABLED` + `InstanceEndpoint` flag | `/api/instances/` returns `is_oidc_enabled` |
+| 4 | `plane-5kc` | admin `oidc/form.tsx` + login "Continue with SSO" | admin toggles config; button shows when enabled |
+| 5 | `plane-ub2` | **go-live**: fork image (`plane-8xx`) → deploy → enter Zitadel creds → verify | asmith SSO round-trip; non-granted user denied |
+| 6 | `plane-2yt` | SAML ACS flow — **deferred**, separate PR | (not required for go-live) |
+
+Order: **1 → (2,3) → 4 → 5**; SAML (6) parallel/after. `plane-07r` is the ready entry point.
+
+**Zitadel values for `plane-ub2`** (entered in the OIDC admin form → `InstanceConfiguration`):
+- `OIDC_CLIENT_ID` = `383249177292901445`
+- `OIDC_CLIENT_SECRET` = *(retrieve out-of-band: `tofu output -raw plane_oidc_client_secret` in the zitadel root — never commit)*
+- `OIDC_URL_AUTHORIZATION` = `https://id.auth.woven/oauth/v2/authorize`
+- `OIDC_URL_TOKEN` = `https://id.auth.woven/oauth/v2/token`
+- `OIDC_URL_USERINFO` = `https://id.auth.woven/oidc/v1/userinfo`
+- discovery: `https://id.auth.woven/.well-known/openid-configuration`
+- redirect already registered in Zitadel: `https://projects.woven/auth/oidc/callback/`
+
+**PR plan:** PR-1 = beads 1–4 (OIDC end-to-end, flag OFF by default). PR-2 = bead 5 (fork image
+build + go-live, flag ON). PR-3 = bead 6 (SAML). Each PR = additive new files + `# woven:`-marked
+edits to only the 4 shared files (`oauth.py`, `error.py`, `urls.py`, `instance.py`).

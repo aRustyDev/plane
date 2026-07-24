@@ -179,10 +179,11 @@ Each feature spec will carry: **Goal** · **Plane-tier parity target** · **Back
 
 ## 8. Open decisions (need operator input)
 
-- **D-LICENSE** — Confirm AGPL posture: keep modifications in-repo + source-offer-able; internal-only
-  distribution. (Recommend: yes, document in `LICENSE`/README, no redistribution beyond Woven.)
-- **D-BASE** — Track upstream `preview` (fast, unstable) or pin to a stable tag and merge selectively?
-  (Recommend: pin to the `v1.3.1` tag we deployed, merge upstream deliberately.)
+- **D-LICENSE** — ✅ RESOLVED (2026-07-24): **public AGPL fork, internal use**. aRustyDev/plane stays
+  public (source-available satisfies AGPL-3.0); clean-room (never copy Plane's closed EE code); deploy on
+  woven-o11y only; document the posture in README. No external redistribution.
+- **D-BASE** — ✅ RESOLVED (2026-07-24): **pin to the `v1.3.1` tag** we deployed; feature branches fork
+  from it; merge upstream `makeplane/plane` deliberately/periodically (the F0.4 drift CI watches this).
 - **D-SCOPE/ORDER** — ✅ RESOLVED (2026-07-24): **OIDC/SAML SSO ships first**, then Phase 1→5 as ordered.
 - **D-DEPTH** — ✅ RESOLVED (2026-07-24): **lean one-pager per feature now**, deepen per-phase at execution.
 - **D-CRM** — "Customers": integrate with an existing CRM, or expose a CRM-style API from Plane?
