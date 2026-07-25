@@ -4,7 +4,7 @@
  * See the LICENSE file for details.
  */
 
-import { KeyRound, Mails } from "lucide-react";
+import { KeyRound, Mails, ShieldCheck } from "lucide-react";
 // types
 import type {
   TCoreInstanceAuthenticationModeKeys,
@@ -23,6 +23,7 @@ import { GiteaConfiguration } from "@/components/authentication/gitea-config";
 import { GithubConfiguration } from "@/components/authentication/github-config";
 import { GitlabConfiguration } from "@/components/authentication/gitlab-config";
 import { GoogleConfiguration } from "@/components/authentication/google-config";
+import { OidcConfiguration } from "@/components/authentication/oidc-config"; // woven: OIDC SSO
 import { PasswordLoginConfiguration } from "@/components/authentication/password-config-switch";
 
 // Authentication methods
@@ -88,5 +89,14 @@ export const getCoreAuthenticationModesMap: (
     icon: <img src={giteaLogo} height={20} width={20} alt="Gitea Logo" />,
     config: <GiteaConfiguration disabled={disabled} updateConfig={updateConfig} />,
     enabledConfigKey: "IS_GITEA_ENABLED",
+  },
+  // woven: OIDC SSO
+  oidc: {
+    key: "oidc",
+    name: "OIDC SSO",
+    description: "Allow members to log in or sign up to Plane with your OpenID Connect provider.",
+    icon: <ShieldCheck className="h-5 w-5 p-0.5 text-tertiary" />,
+    config: <OidcConfiguration disabled={disabled} updateConfig={updateConfig} />,
+    enabledConfigKey: "IS_OIDC_ENABLED",
   },
 });
