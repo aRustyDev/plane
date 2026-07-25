@@ -144,6 +144,55 @@ gitea_config_variables = [
     },
 ]
 
+# woven: generic OIDC SSO provider config (mirrors gitea_config_variables). Only the client
+# secret is encrypted; the authorize/token/userinfo endpoints (or the OIDC_URL_ENDPOINT issuer
+# used for .well-known discovery) are plain. Consumed by OIDCOAuthProvider; IS_OIDC_ENABLED is
+# derived in configure_instance.py and surfaced by the public InstanceEndpoint.
+oidc_config_variables = [
+    {
+        "key": "IS_OIDC_ENABLED",
+        "value": os.environ.get("IS_OIDC_ENABLED", "0"),
+        "category": "OIDC",
+        "is_encrypted": False,
+    },
+    {
+        "key": "OIDC_CLIENT_ID",
+        "value": os.environ.get("OIDC_CLIENT_ID"),
+        "category": "OIDC",
+        "is_encrypted": False,
+    },
+    {
+        "key": "OIDC_CLIENT_SECRET",
+        "value": os.environ.get("OIDC_CLIENT_SECRET"),
+        "category": "OIDC",
+        "is_encrypted": True,
+    },
+    {
+        "key": "OIDC_URL_AUTHORIZATION",
+        "value": os.environ.get("OIDC_URL_AUTHORIZATION"),
+        "category": "OIDC",
+        "is_encrypted": False,
+    },
+    {
+        "key": "OIDC_URL_TOKEN",
+        "value": os.environ.get("OIDC_URL_TOKEN"),
+        "category": "OIDC",
+        "is_encrypted": False,
+    },
+    {
+        "key": "OIDC_URL_USERINFO",
+        "value": os.environ.get("OIDC_URL_USERINFO"),
+        "category": "OIDC",
+        "is_encrypted": False,
+    },
+    {
+        "key": "OIDC_URL_ENDPOINT",
+        "value": os.environ.get("OIDC_URL_ENDPOINT"),
+        "category": "OIDC",
+        "is_encrypted": False,
+    },
+]
+
 smtp_config_variables = [
     {
         "key": "ENABLE_SMTP",
@@ -239,6 +288,7 @@ core_config_variables = [
     *github_config_variables,
     *gitlab_config_variables,
     *gitea_config_variables,
+    *oidc_config_variables,  # woven: OIDC SSO
     *smtp_config_variables,
     *llm_config_variables,
     *unsplash_config_variables,

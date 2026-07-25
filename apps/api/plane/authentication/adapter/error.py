@@ -48,6 +48,14 @@ AUTHENTICATION_ERROR_CODES = {
     "GITHUB_OAUTH_PROVIDER_ERROR": 5120,
     "GITLAB_OAUTH_PROVIDER_ERROR": 5121,
     "GITEA_OAUTH_PROVIDER_ERROR": 5123,
+    # woven: shared verified-email guard. Mirrors upstream fix #9289 / GHSA-7j95-vh8g-f365
+    # (same key and code); backported here because the v1.3.1 fork base predates that fix
+    # (D-BASE: catch up via deliberate upstream merge). Used by the OIDC provider today.
+    "OAUTH_PROVIDER_UNVERIFIED_EMAIL": 5124,
+    # woven: generic OIDC SSO provider. Reserved in a 53xx block (not the 51xx OAuth range)
+    # so a future upstream OIDC never collides with ours — see features/oidc-saml-sso.md.
+    "OIDC_NOT_CONFIGURED": 5300,
+    "OIDC_OAUTH_PROVIDER_ERROR": 5301,
     # Reset Password
     "INVALID_PASSWORD_TOKEN": 5125,
     "EXPIRED_PASSWORD_TOKEN": 5130,
