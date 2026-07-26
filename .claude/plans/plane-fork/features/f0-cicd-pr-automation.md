@@ -151,9 +151,13 @@ PR → smart lint/type/format/build (--affected) + dependency-review + secret sc
 3. **Release orchestration = release-please** (manifest mode) from the start — **no `workflow_dispatch`
    release job, no git-cliff**. It owns the version bump, KeepAChangelog `CHANGELOG.md`, release PR,
    `vX.Y.Z` tag, and GitHub Release.
-4. **Release identity = a GitHub App.** Exact app(s) TBD in a **separate org-wide GitHub App(s) strategy**
-   discussion (how many, purposes, scopes) — tracked as its own bead; the release workflow assumes one
-   "release" App install with `contents: write` + `pull-requests: write`.
+4. **Release identity = 2 personal-account GitHub Apps** (resolved 2026-07-25):
+   - **`woven-release`** — release-please / tagging / Releases on the code repo(s): `contents:write`,
+     `pull-requests:write`, `issues:write`; on the `main` ruleset **bypass** list.
+   - **`woven-deploy`** — the infra image-tag-bump PR: `contents:write` + `pull-requests:write`, installed
+     on and scoped to the **infra** repo only.
+   Owned by the `aRustyDev` account (not an org) for now; private keys in Actions secrets, tokens minted
+   in-workflow via `actions/create-github-app-token`. Transferable to a Woven org later if the repo moves.
 5. **Require signed commits on `main` = YES** from the start (coherent with release-please App-API commits
    + GitHub-UI merges — see §G).
 6. **SHA-pinned Actions = DEFERRED** until the CI/CD flow is stable (own low-priority task, §H).
@@ -171,6 +175,6 @@ PR → smart lint/type/format/build (--affected) + dependency-review + secret sc
 8. woven-o11y admission verify (infra) (Phase 5) — `plane-7fn.4.8`
 9. Security scanning: Dependabot + dependency-review + secret scan + CodeQL config (Phase 6) — `plane-7fn.4.9`
 10. GitHub rulesets: branch (signed commits) + tag + push, Evaluate→Active (Phase 7) — `plane-7fn.4.10`
-11. **GitHub App(s) org strategy** (count/purposes/scopes) — precursor to #5 — `plane-7fn.5` (separate discussion)
+11. **GitHub Apps: create `woven-release` + `woven-deploy`** (2 personal apps, resolved) — precursor to #5 — `plane-7fn.5`
 12. SHA-pin all Actions (DEFERRED, post-stabilization) — `plane-7fn.4.11`
 ```
