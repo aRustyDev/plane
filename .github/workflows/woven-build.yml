@@ -2,26 +2,23 @@
 # Builds the six Plane service images from THIS fork's Dockerfiles and publishes them to the
 # fork-owned GHCR namespace, authenticated with the workflow's GITHUB_TOKEN (no PAT needed —
 # the repo owner is arustydev). Additive; does not touch the inherited upstream build-branch.yml
-# (which still targets Docker Hub makeplane/*). Tracks bead plane-8xx.
+# (which still targets Docker Hub makeplane/*). Tracks plane-8xx / plane-7fn.4.6.
 #
-# MVP scope: manual (workflow_dispatch) + push to the integration branch. The release-driven,
-# cosign-signed variant with SLSA provenance/SBOM is plane-7fn.4.6/.7 (F0.6).
+# Release-driven: fires on a published GitHub Release (release-please cuts it on release-PR
+# merge) and tags images with the release version (vX.Y.Z, vX.Y) + latest + sha. This avoids the
+# GITHUB_TOKEN-tag-no-trigger gotcha (keys off the Release event, not `push: tags`).
+# workflow_dispatch stays for manual/test builds. cosign signing + SLSA provenance/SBOM = 4.7.
 name: Build & publish Plane images (GHCR)
 
 on:
   workflow_dispatch:
     inputs:
       extra_tag:
-        description: "Optional extra tag to apply to all images (e.g. v1.3.1-woven.1)"
+        description: "Optional extra tag to apply to all images (e.g. v1.4.0-rc.1)"
         required: false
         type: string
-  push:
-    branches: [main] # woven: fork integration branch (renamed from master — plane-7fn.4.1)
-    paths-ignore:
-      - "**.md"
-      - "docs/**"
-      - ".claude/**"
-      - ".beads/**"
+  release:
+    types: [published]
 
 concurrency:
   group: woven-build-${{ github.ref }}
@@ -69,9 +66,10 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.image }}
           tags: |
+            type=semver,pattern=v{{version}}
+            type=semver,pattern=v{{major}}.{{minor}}
             type=sha,format=long
-            type=ref,event=branch
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ github.event_name == 'release' }}
             type=raw,value=${{ inputs.extra_tag }},enable=${{ inputs.extra_tag != '' }}
 
       - name: Build and push
