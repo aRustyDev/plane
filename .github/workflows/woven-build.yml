@@ -16,7 +16,7 @@ on:
         required: false
         type: string
   push:
-    branches: [master, woven/ci-ghcr-build] # woven: TEMP branch entry for pre-merge validation; revert to [master] (→ main after plane-7fn.4.1)
+    branches: [master] # woven: switch to `main` after the master→main rename (plane-7fn.4.1)
     paths-ignore:
       - "**.md"
       - "docs/**"
