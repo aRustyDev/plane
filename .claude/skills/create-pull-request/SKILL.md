@@ -1,12 +1,12 @@
 ---
 name: create-pull-request
-description: Use when creating a pull request for the current branch — gathers branch context, generates a PR description following the repo's pull_request_template.md, and creates the PR with a Plane work item ID prefix in the title.
+description: Use when creating a pull request for the current branch — gathers branch context, generates a PR description following the repo's pull_request_template.md, and creates the PR with a Conventional-Commits title and the Plane work item ID in a commit footer.
 user_invocable: true
 ---
 
 # Create PR
 
-Create a pull request using the repo's PR template, a Plane work item ID as the title prefix, and a fully filled-out description based on the actual diff.
+Create a pull request using the repo's PR template, a Conventional-Commits title (no work-item ID in the subject) with the Plane work item ID in a `Refs:` commit footer, and a fully filled-out description based on the actual diff.
 
 ## Workflow
 
@@ -26,15 +26,17 @@ Create a pull request using the repo's PR template, a Plane work item ID as the 
 
 4. **Draft the PR** using the template from step 2:
 
-   **Title**: `[WORK-ITEM-ID] <type>: <concise summary>` (under 70 chars)
-   - Type reflects the change: `fix`, `feat`, `chore`, `refactor`, `docs`, `perf`, etc.
+   **Title**: `<type>(<scope>): <concise summary>` (Conventional Commits; under 70 chars) — **no work-item ID in the title**.
+   - Type reflects the change: `fix`, `feat`, `chore`, `refactor`, `docs`, `perf`, `ci`, etc. Never a leading `[ID]` prefix or a trailing `(ID)` suffix in the subject.
+   - The work item ID belongs in a git **commit footer/trailer** — `Refs: <WORK-ITEM-ID>` — not the subject. This repo squashes with `squash_merge_commit_message=COMMIT_MESSAGES`, so a commit trailer survives onto the base branch; release-please parses the clean subject for the version bump + changelog and **ignores** the `Refs:` footer, keeping the ID out of the changelog. (Never use `BREAKING CHANGE:` as the token — it's reserved and forces a major bump.)
+   - Why the subject must stay clean: a squash-merge of a multi-commit PR uses the **PR title** as the commit subject; a leading `[ID]` prefix isn't valid Conventional Commits and would be skipped by release-please.
 
    **Body**: Fill in every section from the PR template based on the actual diff:
    - **Description** — Clear, concise summary of what the PR does and why. Focus on the "what" and "why", not line-by-line changes. Mention important implementation decisions.
    - **Type of Change** — Check the appropriate box(es): Bug fix, Feature, Improvement, Code refactoring, Performance improvements, Documentation update.
    - **Screenshots and Media** — Leave a placeholder: `<!-- Add screenshots here -->`
    - **Test Scenarios** — Suggest concrete scenarios grounded in the actual changes (e.g., "Navigate to project settings and verify the new toggle works"), not generic ones.
-   - **References** — Include the work item ID, any linked issues the user mentions, and any Sentry issue links/IDs (e.g., `SENTRY-ABC123` or Sentry URLs) referenced earlier in the conversation.
+   - **References** — Include the work item ID (also add it as a `Refs: <WORK-ITEM-ID>` footer on the branch's commit(s) so it lands on the base branch after squash), any linked issues the user mentions, and any Sentry issue links/IDs (e.g., `SENTRY-ABC123` or Sentry URLs) referenced earlier in the conversation.
 
    Append a Claude Code session line at the bottom of the body.
 
@@ -47,7 +49,7 @@ Create a pull request using the repo's PR template, a Plane work item ID as the 
 ## Example Title
 
 ```
-[SILO-1146] fix: allow relative URLs for configuration_url and improve app tile visibility
+fix(config): allow relative URLs for configuration_url and improve app tile visibility
 ```
 
 ## Guidelines
