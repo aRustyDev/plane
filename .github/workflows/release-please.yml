@@ -1,0 +1,32 @@
+# woven: release-please — on push to main, maintains a release PR (version bump + CHANGELOG);
+# on merge it creates the vX.Y.Z tag + GitHub Release. Runs with the arustydev-release GitHub
+# App token so the release PR gets CI and its commits are Verified (satisfies the future
+# signed-commits ruleset; add the app to the ruleset bypass — plane-7fn.4.10). Config:
+# release-please-config.json + .release-please-manifest.json. Replaces the retired
+# check-version.yml. Tracks plane-7fn.4.4 / plane-7fn.4.5.
+name: release-please
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read # the App token (not GITHUB_TOKEN) performs the writes
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mint arustydev-release App token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
+      - name: release-please
+        uses: googleapis/release-please-action@v4
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
