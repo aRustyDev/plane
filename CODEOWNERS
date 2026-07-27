@@ -1,8 +1,4 @@
-.oxlintrc.json   @sriramveeraghanta @lifeiscontent
-.oxfmtrc.json   @sriramveeraghanta @lifeiscontent
-apps/api/           @dheeru0198 @pablohashescobar
-apps/web/           @sriramveeraghanta
-apps/space/         @sriramveeraghanta
-apps/admin/         @sriramveeraghanta
-apps/live/          @Palanikannan1437
-deployments/        @mguptahub
+# woven: fork ownership. Upstream makeplane maintainers (who aren't collaborators on this
+# fork) replaced with the fork owner so code-owner review resolves to a real account and the
+# PR-CI reviewer gate isn't required. See plane-7fn.4.2.
+* @aRustyDev
