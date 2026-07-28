@@ -181,6 +181,10 @@ jobs:
           format: sarif
           output: trivy-${{ matrix.image }}.sarif
           severity: HIGH,CRITICAL
+          # Required with format:sarif — otherwise trivy reports (and exit-codes on) ALL severities,
+          # so MEDIUM/LOW findings (e.g. inherited base-image pip) would trip the gate. This applies
+          # the HIGH,CRITICAL filter to the SARIF *and* the exit-code decision.
+          limit-severities-for-sarif: true
           ignore-unfixed: true
           exit-code: ${{ matrix.gate && '1' || '0' }} # proxy (inherited) → report-only
 
