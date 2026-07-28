@@ -34,7 +34,8 @@
           { "context": "check:types" },
           { "context": "check:format" },
           { "context": "Build packages" },
-          { "context": "Copy Right Check" }
+          { "context": "Copy Right Check" },
+          { "context": "dependency-review" }
         ]
       }
     }

@@ -34,10 +34,12 @@ gh api -X PUT repos/aRustyDev/plane/rulesets/<id> --input .github/rulesets/main-
 Only checks that run on **every** PR and are reliably green are required, because a required check
 that doesn't report (or is red) blocks the merge:
 
-- Included: `check:lint`, `check:types`, `check:format`, `Build packages`, `Copy Right Check`.
-- **Excluded (for now):** `dependency-review` (currently failing — see follow-up), `CodeQL` /
-  `Analyze (*)` (often reports `neutral`), the API build (path-filtered to `apps/api/**`, so it
-  doesn't run on every PR), and third-party `Socket Security` checks. Expand once they're stable.
+- Included: `check:lint`, `check:types`, `check:format`, `Build packages`, `Copy Right Check`,
+  `dependency-review` (added in plane-7fn.4.13 once the Dependency Graph was enabled and it went
+  reliably green — it now gates PRs that introduce HIGH+ vulnerable deps).
+- **Excluded (for now):** `CodeQL` / `Analyze (*)` (often reports `neutral`), the API build
+  (path-filtered to `apps/api/**`, so it doesn't run on every PR), and third-party `Socket
+  Security` checks. Expand once they're stable.
 
 These required checks are also the gate that makes **Dependabot auto-merge** safe
 (`.github/workflows/dependabot-auto-merge.yml`): patch & minor bumps merge only after they pass.
