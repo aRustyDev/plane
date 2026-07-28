@@ -1,0 +1,8 @@
+# woven: CodeQL config for the fork (plane-7fn.4.9, §H). Referenced by codeql.yml's init step.
+# security-extended pulls in the lower-severity / higher-precision-cost queries on top of the
+# default suite. The `actions` language (added to the codeql.yml matrix) scans our own workflow
+# files for supply-chain issues (untrusted checkout, injection, over-broad permissions).
+name: "Woven Plane CodeQL config"
+
+queries:
+  - uses: security-extended

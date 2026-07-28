@@ -1,0 +1,53 @@
+# woven: Dependabot — automated dependency + base-image + Action updates for the fork.
+# Complements the release-build supply-chain scanning (cosign/SBOM/trivy, plane-7fn.4.7) by
+# keeping inputs patched at the source. Tracks plane-7fn.4.9 (§H). Grouped to keep PR volume sane.
+version: 2
+updates:
+  # JS/TS monorepo — pnpm workspace rooted at the repo top; the pnpm updater traverses workspace
+  # packages from here. Minor/patch batched into one PR; majors raised individually for review.
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      js-minor-patch:
+        update-types: [minor, patch]
+
+  # Python API (apps/api/requirements.txt + requirements/*.txt via -r, and pyproject.toml).
+  - package-ecosystem: pip
+    directory: "/apps/api"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      py-minor-patch:
+        update-types: [minor, patch]
+
+  # Container base images — one dir per service Dockerfile (Dockerfile.<svc> is matched by the
+  # docker updater's case-insensitive "dockerfile" filename match).
+  - package-ecosystem: docker
+    directories:
+      - "/apps/admin"
+      - "/apps/web"
+      - "/apps/space"
+      - "/apps/live"
+      - "/apps/api"
+      - "/apps/proxy"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      docker-base-images:
+        patterns: ["*"]
+
+  # GitHub Actions pinned across our workflows (keeps woven-build / release-please / CI current;
+  # feeds the eventual SHA-pin work — plane-7fn.4.11).
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      actions-all:
+        patterns: ["*"]

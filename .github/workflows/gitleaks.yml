@@ -1,0 +1,27 @@
+# woven: gitleaks — scan for committed secrets on every PR and on push to main. Belt-and-braces
+# with GitHub-native secret scanning + push protection (repo setting, enabled alongside this).
+# gitleaks-action v2 is free for personal repos (no GITLEAKS_LICENSE needed for aRustyDev).
+# Tracks plane-7fn.4.9 (§H).
+name: Secret scan (gitleaks)
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history so PR/push commit ranges are scannable
+
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

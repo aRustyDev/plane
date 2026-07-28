@@ -22,7 +22,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: ["python", "javascript"]
+        # woven: added `actions` to scan our own workflow files (supply-chain queries). plane-7fn.4.9
+        language: ["python", "javascript", "actions"]
 
     steps:
       - name: Checkout repository
@@ -32,6 +33,8 @@ jobs:
         uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
+          # woven: security-extended query suite + `actions` language. plane-7fn.4.9
+          config-file: ./.github/codeql/codeql-config.yml
 
       - name: Autobuild
         uses: github/codeql-action/autobuild@v4
