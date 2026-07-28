@@ -186,6 +186,9 @@ jobs:
           # the HIGH,CRITICAL filter to the SARIF *and* the exit-code decision.
           limit-severities-for-sarif: true
           ignore-unfixed: true
+          # Justified, tracked suppressions live in .trivyignore at repo root (each entry carries a
+          # reason + tracking bead). Passed explicitly so it is honored inside the containerized action.
+          trivyignores: .trivyignore
           exit-code: ${{ matrix.gate && '1' || '0' }} # proxy (inherited) → report-only
 
       - name: Upload trivy SARIF
