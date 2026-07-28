@@ -1,0 +1,35 @@
+# woven: auto-merge Dependabot patch & minor updates once they pass CI (plane-7fn.4.10).
+#
+# Safe because the merge is GATED, not immediate:
+#   - `gh pr merge --auto` only completes AFTER the main branch ruleset's required status checks
+#     go green (check:lint / :types / :format / Build packages / Copy Right Check). No green, no merge.
+#   - The squash merge is created by GitHub (web-flow key) → Verified, satisfying the ruleset's
+#     require-signed-commits rule. Dependabot's own (unsigned) branch commits never land on main.
+#   - Majors are intentionally NOT auto-merged — they wait for a human.
+#
+# The `permissions:` block below is honored for Dependabot-triggered pull_request runs (GitHub
+# grants the declared scopes to the read-only Dependabot token). No pull_request_target, and no PR
+# code is checked out or executed here — this job only reads metadata and flips the auto-merge flag.
+name: Dependabot auto-merge
+
+on: pull_request
+
+permissions:
+  contents: write # enable auto-merge / squash
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch Dependabot metadata
+        id: meta
+        uses: dependabot/fetch-metadata@v2
+
+      - name: Enable auto-merge (patch & minor only)
+        if: steps.meta.outputs.update-type == 'version-update:semver-patch' || steps.meta.outputs.update-type == 'version-update:semver-minor'
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
