@@ -2,12 +2,31 @@
 # Builds the six Plane service images from THIS fork's Dockerfiles and publishes them to the
 # fork-owned GHCR namespace, authenticated with the workflow's GITHUB_TOKEN (no PAT needed —
 # the repo owner is arustydev). Additive; does not touch the inherited upstream build-branch.yml
-# (which still targets Docker Hub makeplane/*). Tracks plane-8xx / plane-7fn.4.6.
+# (which still targets Docker Hub makeplane/*). Tracks plane-8xx / plane-7fn.4.6 / plane-7fn.4.7.
 #
 # Release-driven: fires on a published GitHub Release (release-please cuts it on release-PR
 # merge) and tags images with the release version (vX.Y.Z, vX.Y) + latest + sha. This avoids the
 # GITHUB_TOKEN-tag-no-trigger gotcha (keys off the Release event, not `push: tags`).
-# workflow_dispatch stays for manual/test builds. cosign signing + SLSA provenance/SBOM = 4.7.
+# workflow_dispatch stays for manual/test builds.
+#
+# Supply chain (plane-7fn.4.7): every image is signed and attested by DIGEST (never the tag) —
+#   1. cosign sign (keyless, GitHub OIDC → Fulcio, logged to Rekor)
+#   2. cosign attest --type spdxjson  (Syft SBOM predicate)
+#   3. actions/attest-build-provenance (SLSA v1 provenance, pushed to the registry + GH store)
+#   4. trivy image scan → SARIF uploaded to the Security tab (report-only for now — see 4.7 note)
+#
+# Verify a released image (what the woven-o11y admission policy enforces — plane-7fn.4.8):
+#   IDENTITY='https://github.com/aRustyDev/plane/.github/workflows/woven-build.yml@refs/tags/v.*'
+#   cosign verify \
+#     --certificate-identity-regexp "$IDENTITY" \
+#     --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+#     ghcr.io/arustydev/plane-backend:v1.4.0
+#   cosign verify-attestation --type spdxjson \
+#     --certificate-identity-regexp "$IDENTITY" \
+#     --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+#     ghcr.io/arustydev/plane-backend:v1.4.0
+#   gh attestation verify oci://ghcr.io/arustydev/plane-backend:v1.4.0 --owner aRustyDev
+# (Release builds sign under @refs/tags/v*; workflow_dispatch builds sign under @refs/heads/main.)
 name: Build & publish Plane images (GHCR)
 
 on:
@@ -26,7 +45,10 @@ concurrency:
 
 permissions:
   contents: read
-  packages: write # push to GHCR
+  packages: write # push to GHCR + push attestations
+  id-token: write # cosign keyless (Fulcio) + attest-build-provenance OIDC
+  attestations: write # actions/attest-build-provenance → GitHub attestation store
+  security-events: write # upload trivy SARIF to the Security tab
 
 env:
   REGISTRY: ghcr.io
@@ -65,6 +87,10 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.image }}
+          # latest=false disables the default latest=auto flavor, which would emit a SECOND
+          # `latest` tag on semver releases (duplicating the explicit release-gated raw tag below).
+          flavor: |
+            latest=false
           tags: |
             type=semver,pattern=v{{version}}
             type=semver,pattern=v{{major}}.{{minor}}
@@ -72,7 +98,11 @@ jobs:
             type=raw,value=latest,enable=${{ github.event_name == 'release' }}
             type=raw,value=${{ inputs.extra_tag }},enable=${{ inputs.extra_tag != '' }}
 
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
       - name: Build and push
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.context }}
@@ -83,3 +113,58 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+      # ── Supply chain: sign + attest by digest (plane-7fn.4.7) ────────────────────────────
+      # Everything below pins to the immutable digest (steps.build.outputs.digest), never a
+      # mutable tag, so signatures/attestations bind to the exact bytes that were pushed.
+      - name: Set image ref (by digest)
+        id: ref
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.image }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: echo "image_ref=${IMAGE}@${DIGEST}" >> "$GITHUB_OUTPUT"
+
+      - name: Sign image (keyless)
+        env:
+          IMAGE_REF: ${{ steps.ref.outputs.image_ref }}
+        run: cosign sign --yes "$IMAGE_REF"
+
+      - name: Generate SBOM (SPDX JSON)
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ steps.ref.outputs.image_ref }}
+          format: spdx-json
+          output-file: sbom.spdx.json
+          upload-artifact: false
+
+      - name: Attest SBOM (cosign)
+        env:
+          IMAGE_REF: ${{ steps.ref.outputs.image_ref }}
+        run: cosign attest --yes --type spdxjson --predicate sbom.spdx.json "$IMAGE_REF"
+
+      - name: Attest SLSA build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.image }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      # Report-only for now: uploads a SARIF report to the Security tab on every build but does
+      # NOT fail the release, so inherited upstream base-image CVEs can't block a cut. Flip to
+      # gating (exit-code:1 + ignore-unfixed) once the base-image baseline is triaged — plane-7fn.4.12.
+      - name: Scan image (trivy → SARIF)
+        uses: aquasecurity/trivy-action@0.28.0
+        continue-on-error: true # report-only: a trivy DB/registry flake must not fail a release
+        with:
+          image-ref: ${{ steps.ref.outputs.image_ref }}
+          format: sarif
+          output: trivy-${{ matrix.image }}.sarif
+          severity: HIGH,CRITICAL
+          exit-code: "0"
+
+      - name: Upload trivy SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        continue-on-error: true
+        with:
+          sarif_file: trivy-${{ matrix.image }}.sarif
+          category: trivy-${{ matrix.image }}
