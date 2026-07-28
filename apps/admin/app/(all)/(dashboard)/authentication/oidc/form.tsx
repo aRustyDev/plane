@@ -139,8 +139,8 @@ export function InstanceOidcConfigForm(props: Props) {
       url: `${originURL}/auth/oidc/callback/`,
       description: (
         <>
-          We will auto-generate this. Register it as an{" "}
-          <CodeBlock darkerShade>Authorized Redirect URI</CodeBlock> on your OpenID Connect provider.
+          We will auto-generate this. Register it as an <CodeBlock darkerShade>Authorized Redirect URI</CodeBlock> on
+          your OpenID Connect provider.
         </>
       ),
     },
