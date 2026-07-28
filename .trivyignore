@@ -1,0 +1,13 @@
+# Trivy vulnerability ignore file — woven-build release gate (plane-7fn.4.12).
+# Each entry MUST carry a justification and, where relevant, a tracking issue.
+# Format: one advisory/CVE ID per line; `#` comments allowed.
+
+# react-router — "RSC Mode CSRF Bypass Allows Action Execution Before 400 Response".
+# Advisory range is >=7.12.0 <8.3.0; the ONLY patched version is react-router 8.3.0, which
+# hard-requires React 19 (peer react/react-dom >=19.2.7). Plane is on React 18.3.1 and this
+# bump is deferred to the React 18->19 migration epic (bd plane-1ym). The advisory is specific
+# to react-router *RSC mode*, which Plane does not use — all three apps (web/admin/space) wire
+# the classic framework-mode `reactRouter()` vite plugin, and there is no @vitejs/plugin-rsc /
+# react-server-dom usage in the tree. So this is a version-range match, not a reachable path.
+# Remove this entry when plane-1ym lands react-router 8.x on React 19.
+GHSA-qwww-vcr4-c8h2
