@@ -13,7 +13,7 @@
 #   1. cosign sign (keyless, GitHub OIDC → Fulcio, logged to Rekor)
 #   2. actions/attest-sbom (Syft SPDX SBOM → OCI referrer + GH attestation store)
 #   3. actions/attest-build-provenance (SLSA v1 provenance → OCI referrer + GH attestation store)
-#   4. trivy (image) + grype (over the Syft SBOM) scans → GATE on fixable HIGH/CRITICAL + SARIF
+#   4. trivy GATES on fixable HIGH/CRITICAL in our LIBRARY deps; grype reports the full SBOM → SARIF
 # Both attestations use the GitHub attest-* actions (uniform OCI-1.1 referrer storage) so cosign v3
 # (referrers-only) and `gh attestation verify` both see them. (cosign attest writes the legacy
 # `.att` tag, which cosign v3 verify-attestation can't read — that's why we don't use it here.)
@@ -67,12 +67,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { image: plane-admin, dockerfile: apps/admin/Dockerfile.admin, context: "." }
-          - { image: plane-frontend, dockerfile: apps/web/Dockerfile.web, context: "." }
-          - { image: plane-space, dockerfile: apps/space/Dockerfile.space, context: "." }
-          - { image: plane-live, dockerfile: apps/live/Dockerfile.live, context: "." }
-          - { image: plane-backend, dockerfile: apps/api/Dockerfile.api, context: "apps/api" }
-          - { image: plane-proxy, dockerfile: apps/proxy/Dockerfile.ce, context: "apps/proxy" }
+          # gate: true = fail the release on fixable HIGH/CRITICAL in OUR library deps. The proxy is
+          # a pure inherited upstream image (we build no code into it), so its base-image/Go-binary
+          # CVEs are report-only here and tracked for a base-image refresh (plane-7fn.4.23).
+          - { image: plane-admin, dockerfile: apps/admin/Dockerfile.admin, context: ".", gate: true }
+          - { image: plane-frontend, dockerfile: apps/web/Dockerfile.web, context: ".", gate: true }
+          - { image: plane-space, dockerfile: apps/space/Dockerfile.space, context: ".", gate: true }
+          - { image: plane-live, dockerfile: apps/live/Dockerfile.live, context: ".", gate: true }
+          - { image: plane-backend, dockerfile: apps/api/Dockerfile.api, context: "apps/api", gate: true }
+          - { image: plane-proxy, dockerfile: apps/proxy/Dockerfile.ce, context: "apps/proxy", gate: false }
     name: build ${{ matrix.image }}
     steps:
       - name: Checkout
@@ -158,23 +161,28 @@ jobs:
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
 
-      # ── Vulnerability scanning: GATE on fixable HIGH/CRITICAL (plane-7fn.4.12) ─────────────
-      # Two scanners for coverage: Trivy scans the image; Grype scans the Syft SBOM generated
-      # above (the syft→grype pipeline). Both fail the job on FIXABLE (ignore-unfixed / only-fixed)
-      # HIGH+CRITICAL, so inherited base-image CVEs with no available patch don't block a release,
-      # but actionable ones do. Both upload SARIF to the Security tab via `if: always()`, so
-      # findings stay visible even when they gate.
-      # NOTE: these run AFTER push/sign, so a gate fails the release JOB (a loud signal) but the
-      # image is already published. A scan-before-push restructure (a true publish gate) = plane-7fn.4.16.
-      - name: Scan image (trivy)
+      # ── Vulnerability scanning (plane-7fn.4.12 / .22) ─────────────────────────────────────
+      # Division of labour, decided after triaging the baseline (which is ~95% inherited base-image
+      # OS packages + the inherited proxy Go binary — none of which our deps control):
+      #   • Trivy = the GATE, scoped to LIBRARY packages (TRIVY_PKG_TYPES=library) so it fails the
+      #     release only on fixable HIGH/CRITICAL in OUR application deps (pnpm workspace + apps/api
+      #     pip), not on inherited Alpine OS packages. matrix.gate turns the gate off for the proxy
+      #     (a pure inherited image). ignore-unfixed so un-patchable CVEs never block.
+      #   • Grype = full REPORT-ONLY over the Syft SBOM (OS + library), never gates — it keeps the
+      #     inherited base-image backlog visible in the Security tab (tracked for refresh in 4.23).
+      # Both upload SARIF via `if: always()`. NOTE: scans run AFTER push/sign, so a gate fails the
+      # release JOB (a loud signal), not the publish — a scan-before-push restructure is 4.21.
+      - name: Scan image (trivy — gate on our library deps)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_PKG_TYPES: library # gate on app/language deps, not inherited OS packages
         with:
           image-ref: ${{ steps.ref.outputs.image_ref }}
           format: sarif
           output: trivy-${{ matrix.image }}.sarif
           severity: HIGH,CRITICAL
           ignore-unfixed: true
-          exit-code: "1" # gate: fail on fixable HIGH/CRITICAL
+          exit-code: ${{ matrix.gate && '1' || '0' }} # proxy (inherited) → report-only
 
       - name: Upload trivy SARIF
         if: always()
@@ -184,20 +192,20 @@ jobs:
           sarif_file: trivy-${{ matrix.image }}.sarif
           category: trivy-${{ matrix.image }}
 
-      - name: Scan SBOM (grype)
-        if: always() && steps.build.conclusion == 'success' # run even if trivy gated, but only once an image exists
+      - name: Scan SBOM (grype — full, report-only)
+        if: always() && steps.build.conclusion == 'success' # run even if trivy gated, once an image exists
         uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7.4.0
         with:
           sbom: sbom.spdx.json
           severity-cutoff: high
           only-fixed: true
-          fail-build: true # gate: fail on fixable HIGH/CRITICAL
+          fail-build: false # report-only: full OS+library visibility, trivy is the gate
           output-format: sarif
           output-file: grype-${{ matrix.image }}.sarif
 
       - name: Upload grype SARIF
         if: always()
-        continue-on-error: true # the scan is the gate; a SARIF upload hiccup must not add noise
+        continue-on-error: true
         uses: github/codeql-action/upload-sarif@4187e74d05793876e9989daffde9c3e66b4acd07 # v3.37.3
         with:
           sarif_file: grype-${{ matrix.image }}.sarif
