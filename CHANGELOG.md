@@ -7,6 +7,13 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). R
 managed by [release-please](https://github.com/googleapis/release-please); entries are grouped
 as Added / Changed / Deprecated / Removed / Fixed / Security.
 
+## [1.4.1](https://github.com/aRustyDev/plane/compare/v1.4.0...v1.4.1) (2026-07-28)
+
+
+### Fixed
+
+* **woven:** attest SBOM via actions/attest-sbom (referrer, not cosign .att tag) ([#12](https://github.com/aRustyDev/plane/issues/12)) ([a4b871f](https://github.com/aRustyDev/plane/commit/a4b871f3c682ef9f96607dfb58e7a39f8fe761bd))
+
 ## [1.4.0](https://github.com/aRustyDev/plane/compare/v1.3.1...v1.4.0) (2026-07-27)
 
 
