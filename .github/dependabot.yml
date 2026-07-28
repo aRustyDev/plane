@@ -60,6 +60,7 @@ updates:
       - dependency-name: "valibot"
       - dependency-name: "vite"
       - dependency-name: "webpack"
+      - dependency-name: "ws"
       - dependency-name: "yaml"
 
   # Python API (apps/api/requirements.txt + requirements/*.txt via -r, and pyproject.toml).
