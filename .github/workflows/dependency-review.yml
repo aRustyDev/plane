@@ -1,0 +1,26 @@
+# woven: dependency-review — on PRs to main, block newly-introduced deps with known-vulnerable
+# versions (fail on HIGH+) and summarize in the PR. Complements Dependabot (which patches over
+# time) by gating at review time. Tracks plane-7fn.4.9 (§H). Requires the repo Dependency graph
+# (on by default for public repos).
+name: Dependency review
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write # post the review summary comment
+
+jobs:
+  dependency-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Dependency review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: on-failure
