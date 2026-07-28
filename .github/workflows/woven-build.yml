@@ -178,12 +178,14 @@ jobs:
 
       - name: Upload trivy SARIF
         if: always()
+        continue-on-error: true # the scan is the gate; a SARIF upload hiccup must not add noise
         uses: github/codeql-action/upload-sarif@4187e74d05793876e9989daffde9c3e66b4acd07 # v3.37.3
         with:
           sarif_file: trivy-${{ matrix.image }}.sarif
           category: trivy-${{ matrix.image }}
 
       - name: Scan SBOM (grype)
+        if: always() && steps.build.conclusion == 'success' # run even if trivy gated, but only once an image exists
         uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7.4.0
         with:
           sbom: sbom.spdx.json
@@ -195,6 +197,7 @@ jobs:
 
       - name: Upload grype SARIF
         if: always()
+        continue-on-error: true # the scan is the gate; a SARIF upload hiccup must not add noise
         uses: github/codeql-action/upload-sarif@4187e74d05793876e9989daffde9c3e66b4acd07 # v3.37.3
         with:
           sarif_file: grype-${{ matrix.image }}.sarif
