@@ -153,7 +153,7 @@ jobs:
       # NOT fail the release, so inherited upstream base-image CVEs can't block a cut. Flip to
       # gating (exit-code:1 + ignore-unfixed) once the base-image baseline is triaged — plane-7fn.4.12.
       - name: Scan image (trivy → SARIF)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         continue-on-error: true # report-only: a trivy DB/registry flake must not fail a release
         with:
           image-ref: ${{ steps.ref.outputs.image_ref }}
