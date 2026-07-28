@@ -11,21 +11,26 @@
 #
 # Supply chain (plane-7fn.4.7): every image is signed and attested by DIGEST (never the tag) —
 #   1. cosign sign (keyless, GitHub OIDC → Fulcio, logged to Rekor)
-#   2. cosign attest --type spdxjson  (Syft SBOM predicate)
-#   3. actions/attest-build-provenance (SLSA v1 provenance, pushed to the registry + GH store)
+#   2. actions/attest-sbom (Syft SPDX SBOM → OCI referrer + GH attestation store)
+#   3. actions/attest-build-provenance (SLSA v1 provenance → OCI referrer + GH attestation store)
 #   4. trivy image scan → SARIF uploaded to the Security tab (report-only for now — see 4.7 note)
+# Both attestations use the GitHub attest-* actions (uniform OCI-1.1 referrer storage) so cosign v3
+# (referrers-only) and `gh attestation verify` both see them. (cosign attest writes the legacy
+# `.att` tag, which cosign v3 verify-attestation can't read — that's why we don't use it here.)
 #
-# Verify a released image (what the woven-o11y admission policy enforces — plane-7fn.4.8):
+# Verify a released image (what the woven-o11y admission policy enforces — plane-7fn.4.8).
+# NOTE: pass the FULL predicate-type URI to cosign — the --type spdxjson/slsaprovenance shorthands
+# do not map to these predicate types in cosign v3.
 #   IDENTITY='https://github.com/aRustyDev/plane/.github/workflows/woven-build.yml@refs/tags/v.*'
-#   cosign verify \
-#     --certificate-identity-regexp "$IDENTITY" \
-#     --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-#     ghcr.io/arustydev/plane-backend:v1.4.0
-#   cosign verify-attestation --type spdxjson \
-#     --certificate-identity-regexp "$IDENTITY" \
-#     --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-#     ghcr.io/arustydev/plane-backend:v1.4.0
-#   gh attestation verify oci://ghcr.io/arustydev/plane-backend:v1.4.0 --owner aRustyDev
+#   ISSUER=https://token.actions.githubusercontent.com
+#   IMG=ghcr.io/arustydev/plane-backend:v1.4.0
+#   cosign verify --certificate-identity-regexp "$IDENTITY" --certificate-oidc-issuer "$ISSUER" "$IMG"
+#   cosign verify-attestation --type https://spdx.dev/Document \
+#     --certificate-identity-regexp "$IDENTITY" --certificate-oidc-issuer "$ISSUER" "$IMG"
+#   cosign verify-attestation --type https://slsa.dev/provenance/v1 \
+#     --certificate-identity-regexp "$IDENTITY" --certificate-oidc-issuer "$ISSUER" "$IMG"
+#   gh attestation verify oci://$IMG --owner aRustyDev            # SLSA provenance
+#   gh attestation verify oci://$IMG --owner aRustyDev --predicate-type https://spdx.dev/Document  # SBOM
 # (Release builds sign under @refs/tags/v*; workflow_dispatch builds sign under @refs/heads/main.)
 name: Build & publish Plane images (GHCR)
 
@@ -137,10 +142,13 @@ jobs:
           output-file: sbom.spdx.json
           upload-artifact: false
 
-      - name: Attest SBOM (cosign)
-        env:
-          IMAGE_REF: ${{ steps.ref.outputs.image_ref }}
-        run: cosign attest --yes --type spdxjson --predicate sbom.spdx.json "$IMAGE_REF"
+      - name: Attest SBOM
+        uses: actions/attest-sbom@v2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.image }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          sbom-path: sbom.spdx.json
+          push-to-registry: true
 
       - name: Attest SLSA build provenance
         uses: actions/attest-build-provenance@v2
