@@ -13,7 +13,7 @@
 #   1. cosign sign (keyless, GitHub OIDC → Fulcio, logged to Rekor)
 #   2. actions/attest-sbom (Syft SPDX SBOM → OCI referrer + GH attestation store)
 #   3. actions/attest-build-provenance (SLSA v1 provenance → OCI referrer + GH attestation store)
-#   4. trivy image scan → SARIF uploaded to the Security tab (report-only for now — see 4.7 note)
+#   4. trivy (image) + grype (over the Syft SBOM) scans → GATE on fixable HIGH/CRITICAL + SARIF
 # Both attestations use the GitHub attest-* actions (uniform OCI-1.1 referrer storage) so cosign v3
 # (referrers-only) and `gh attestation verify` both see them. (cosign attest writes the legacy
 # `.att` tag, which cosign v3 verify-attestation can't read — that's why we don't use it here.)
@@ -158,22 +158,44 @@ jobs:
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
 
-      # Report-only for now: uploads a SARIF report to the Security tab on every build but does
-      # NOT fail the release, so inherited upstream base-image CVEs can't block a cut. Flip to
-      # gating (exit-code:1 + ignore-unfixed) once the base-image baseline is triaged — plane-7fn.4.12.
-      - name: Scan image (trivy → SARIF)
+      # ── Vulnerability scanning: GATE on fixable HIGH/CRITICAL (plane-7fn.4.12) ─────────────
+      # Two scanners for coverage: Trivy scans the image; Grype scans the Syft SBOM generated
+      # above (the syft→grype pipeline). Both fail the job on FIXABLE (ignore-unfixed / only-fixed)
+      # HIGH+CRITICAL, so inherited base-image CVEs with no available patch don't block a release,
+      # but actionable ones do. Both upload SARIF to the Security tab via `if: always()`, so
+      # findings stay visible even when they gate.
+      # NOTE: these run AFTER push/sign, so a gate fails the release JOB (a loud signal) but the
+      # image is already published. A scan-before-push restructure (a true publish gate) = plane-7fn.4.16.
+      - name: Scan image (trivy)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        continue-on-error: true # report-only: a trivy DB/registry flake must not fail a release
         with:
           image-ref: ${{ steps.ref.outputs.image_ref }}
           format: sarif
           output: trivy-${{ matrix.image }}.sarif
           severity: HIGH,CRITICAL
-          exit-code: "0"
+          ignore-unfixed: true
+          exit-code: "1" # gate: fail on fixable HIGH/CRITICAL
 
       - name: Upload trivy SARIF
+        if: always()
         uses: github/codeql-action/upload-sarif@4187e74d05793876e9989daffde9c3e66b4acd07 # v3.37.3
-        continue-on-error: true
         with:
           sarif_file: trivy-${{ matrix.image }}.sarif
           category: trivy-${{ matrix.image }}
+
+      - name: Scan SBOM (grype)
+        uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7.4.0
+        with:
+          sbom: sbom.spdx.json
+          severity-cutoff: high
+          only-fixed: true
+          fail-build: true # gate: fail on fixable HIGH/CRITICAL
+          output-format: sarif
+          output-file: grype-${{ matrix.image }}.sarif
+
+      - name: Upload grype SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@4187e74d05793876e9989daffde9c3e66b4acd07 # v3.37.3
+        with:
+          sarif_file: grype-${{ matrix.image }}.sarif
+          category: grype-${{ matrix.image }}
