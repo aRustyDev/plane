@@ -13,6 +13,51 @@ updates:
     groups:
       js-minor-patch:
         update-types: [minor, patch]
+    # woven (plane-7fn.4.14): these packages are version-pinned centrally in the root package.json
+    # `pnpm.overrides` (security/consistency pins from #9456 + catalog:). Dependabot bumps only the
+    # leaf specs + lockfile `overrides` snapshot, leaving the root override untouched, which breaks
+    # `pnpm install --frozen-lockfile` (ERR_PNPM_LOCKFILE_CONFIG_MISMATCH) on every such PR. Update
+    # these deliberately by editing `pnpm.overrides` (and the catalog) instead. KEEP THIS LIST IN
+    # SYNC with the keys of `pnpm.overrides`.
+    ignore:
+      - dependency-name: "@babel/helpers"
+      - dependency-name: "@babel/runtime"
+      - dependency-name: "@isaacs/brace-expansion"
+      - dependency-name: "@types/express"
+      - dependency-name: "ajv"
+      - dependency-name: "axios"
+      - dependency-name: "brace-expansion"
+      - dependency-name: "chokidar"
+      - dependency-name: "defu"
+      - dependency-name: "diff"
+      - dependency-name: "esbuild"
+      - dependency-name: "express"
+      - dependency-name: "flatted"
+      - dependency-name: "follow-redirects"
+      - dependency-name: "glob"
+      - dependency-name: "happy-dom"
+      - dependency-name: "js-yaml"
+      - dependency-name: "lodash"
+      - dependency-name: "lodash-es"
+      - dependency-name: "markdown-it"
+      - dependency-name: "mdast-util-to-hast"
+      - dependency-name: "minimatch"
+      - dependency-name: "nanoid"
+      - dependency-name: "path-to-regexp"
+      - dependency-name: "picomatch"
+      - dependency-name: "postcss"
+      - dependency-name: "prosemirror-view"
+      - dependency-name: "qs"
+      - dependency-name: "rollup"
+      - dependency-name: "serialize-javascript"
+      - dependency-name: "tar-fs"
+      - dependency-name: "typescript"
+      - dependency-name: "undici"
+      - dependency-name: "uuid"
+      - dependency-name: "valibot"
+      - dependency-name: "vite"
+      - dependency-name: "webpack"
+      - dependency-name: "yaml"
 
   # Python API (apps/api/requirements.txt + requirements/*.txt via -r, and pyproject.toml).
   - package-ecosystem: pip
