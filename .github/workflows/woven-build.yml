@@ -20,12 +20,13 @@
 #
 # Verify a released image (what the woven-o11y admission policy enforces — plane-7fn.4.8).
 # NOTE: pass the FULL predicate-type URI to cosign — the --type spdxjson/slsaprovenance shorthands
-# do not map to these predicate types in cosign v3.
+# do not map to these predicate types in cosign v3. The SBOM type carries the SPDX spec version
+# (…/Document/v2.3); match on that exact value or the …/Document prefix as your tooling allows.
 #   IDENTITY='https://github.com/aRustyDev/plane/.github/workflows/woven-build.yml@refs/tags/v.*'
 #   ISSUER=https://token.actions.githubusercontent.com
 #   IMG=ghcr.io/arustydev/plane-backend:v1.4.0
 #   cosign verify --certificate-identity-regexp "$IDENTITY" --certificate-oidc-issuer "$ISSUER" "$IMG"
-#   cosign verify-attestation --type https://spdx.dev/Document \
+#   cosign verify-attestation --type https://spdx.dev/Document/v2.3 \
 #     --certificate-identity-regexp "$IDENTITY" --certificate-oidc-issuer "$ISSUER" "$IMG"
 #   cosign verify-attestation --type https://slsa.dev/provenance/v1 \
 #     --certificate-identity-regexp "$IDENTITY" --certificate-oidc-issuer "$ISSUER" "$IMG"
