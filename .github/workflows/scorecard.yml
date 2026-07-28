@@ -1,0 +1,64 @@
+# woven: OpenSSF Scorecard — scheduled supply-chain posture audit for this fork (plane-7fn.4.16).
+#
+# ossf/scorecard-action force-disables `publish_results` on forks and is geared to the upstream
+# repo, so we run the Scorecard CLI directly (pinned version + checksum-verified) and upload the
+# SARIF to code scanning. Scorecard queries the repo over the GitHub API, so no checkout is needed.
+#
+# ONE-TIME SETUP (repo admin): create a CLASSIC PAT with scopes `public_repo` and `read:org`, then
+# add it as the Actions secret `SCORECARD_TOKEN`. Without it the run falls back to the job token and
+# the Branch-Protection (plus a few admin-scoped) checks report inconclusive — everything else still
+# scores. `publish_results` is intentionally OFF (forks must not publish to the public dashboard).
+name: Scorecard supply-chain audit
+
+on:
+  schedule:
+    - cron: "27 4 * * 1" # weekly, Mondays 04:27 UTC
+  workflow_dispatch:
+
+permissions: read-all
+
+jobs:
+  analysis:
+    name: Scorecard analysis
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write # upload SARIF to code scanning
+      contents: read
+    env:
+      SCORECARD_VERSION: 5.5.0
+      SCORECARD_SHA256: 83b90a05c1540ef1390db1cd5711e5fd04be9c1d8537fb84d39d02092d6a8dff
+    steps:
+      - name: Checkout (for the Scorecard policy file)
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Install Scorecard CLI (pinned + checksum-verified)
+        run: |
+          set -euo pipefail
+          tarball="scorecard_${SCORECARD_VERSION}_linux_amd64.tar.gz"
+          curl -fsSL -o "${tarball}" \
+            "https://github.com/ossf/scorecard/releases/download/v${SCORECARD_VERSION}/${tarball}"
+          echo "${SCORECARD_SHA256}  ${tarball}" | sha256sum -c -
+          tar -xzf "${tarball}" scorecard
+          sudo install -m 0755 scorecard /usr/local/bin/scorecard
+          scorecard version
+
+      - name: Run Scorecard → SARIF
+        env:
+          # PAT enables Branch-Protection + admin-scoped checks; falls back to the job token.
+          GITHUB_AUTH_TOKEN: ${{ secrets.SCORECARD_TOKEN || github.token }}
+          ENABLE_SARIF: "1" # SARIF output is gated behind this experimental flag
+        run: |
+          set -euo pipefail
+          scorecard \
+            --repo="github.com/${GITHUB_REPOSITORY}" \
+            --policy=.github/scorecard-policy.yml \
+            --show-details \
+            --format=sarif > results.sarif
+
+      - name: Upload SARIF to code scanning
+        uses: github/codeql-action/upload-sarif@4187e74d05793876e9989daffde9c3e66b4acd07 # v3.37.3
+        with:
+          sarif_file: results.sarif
+          category: scorecard
