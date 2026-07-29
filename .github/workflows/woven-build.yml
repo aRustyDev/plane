@@ -13,10 +13,19 @@
 #   1. cosign sign (keyless, GitHub OIDC → Fulcio, logged to Rekor)
 #   2. actions/attest-sbom (Syft SPDX SBOM → OCI referrer + GH attestation store)
 #   3. actions/attest-build-provenance (SLSA v1 provenance → OCI referrer + GH attestation store)
-#   4. trivy GATES on fixable HIGH/CRITICAL in our LIBRARY deps; grype reports the full SBOM → SARIF
+#   4. VERIFY gate (plane-7fn.4.17): re-pull the just-pushed digest and cosign verify-attestation
+#      BOTH predicate types + gh attestation verify (builder-workflow identity + owner) → this closes
+#      the "sign without verify" gap by FAILING the release job on any attestation mismatch.
+#   5. trivy GATES on fixable HIGH/CRITICAL in our LIBRARY deps; grype reports the full SBOM → SARIF
 # Both attestations use the GitHub attest-* actions (uniform OCI-1.1 referrer storage) so cosign v3
 # (referrers-only) and `gh attestation verify` both see them. (cosign attest writes the legacy
 # `.att` tag, which cosign v3 verify-attestation can't read — that's why we don't use it here.)
+# NOTE: slsa-framework/slsa-verifier's `verify-image` is deliberately NOT used in the verify gate.
+# It targets slsa-github-generator DSSE provenance and cannot discover attest-build-provenance's
+# OCI-1.1 referrer / sigstore-bundle format (verified against a released image under plane-7fn.4.17
+# via default discovery, --provenance-repository, and --provenance-path — all "no matching
+# attestations"). `gh attestation verify` is the equivalent GitHub-native check that asserts our
+# builder-workflow identity + source owner for attest-* provenance, so it fills slsa-verifier's role.
 #
 # Verify a released image (what the woven-o11y admission policy enforces — plane-7fn.4.8).
 # NOTE: pass the FULL predicate-type URI to cosign — the --type spdxjson/slsaprovenance shorthands
@@ -160,6 +169,78 @@ jobs:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.image }}
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
+
+      # ── Verify what we just signed: post-build attestation GATE (plane-7fn.4.17) ──────────
+      # Closes the "sign without verify" gap. Re-pulls the freshly-pushed DIGEST (steps.ref, never a
+      # mutable tag) and independently verifies BOTH attestations against Sigstore, FAILING the job on
+      # any mismatch. Two complementary verifiers, both keyless (no key material in CI):
+      #   • cosign verify-attestation — asserts the keyless cert-identity regexp + OIDC issuer for BOTH
+      #     predicate types. Pass the FULL predicate-type URI (the spdxjson/slsaprovenance shorthands
+      #     do NOT map in cosign v3): SBOM = https://spdx.dev/Document/v2.3, SLSA = .../provenance/v1.
+      #     The identity regexp pins our builder workflow AND source repo (github.com/aRustyDev/plane/
+      #     .github/workflows/woven-build.yml@…). Release builds sign under @refs/tags/v*, manual
+      #     workflow_dispatch under @refs/heads/main — so IDENTITY is selected by github.event_name.
+      #   • gh attestation verify — GitHub-native cross-check of the same attest-* provenance; asserts
+      #     the builder-workflow identity (--signer-workflow) + source owner (--owner) for the SLSA
+      #     provenance and the SBOM (--predicate-type https://spdx.dev/Document). Uses GITHUB_TOKEN
+      #     (packages:read is covered by the packages:write grant for our own GHCR namespace).
+      # cosign was installed above (sigstore/cosign-installer, pinned); gh ships on ubuntu-latest.
+      # matrix.gate mirrors the trivy gate: the 5 first-party images FAIL on mismatch; the inherited
+      # proxy is report-only (::warning::) — consistent with how the vuln gate treats it.
+      - name: Verify attestations (cosign + gh) — gate
+        env:
+          IMAGE_REF: ${{ steps.ref.outputs.image_ref }}
+          GATE: ${{ matrix.gate }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUER: "https://token.actions.githubusercontent.com"
+          # Release builds sign under @refs/tags/v*; workflow_dispatch builds under @refs/heads/main.
+          IDENTITY: ${{ github.event_name == 'release' && 'https://github.com/aRustyDev/plane/.github/workflows/woven-build.yml@refs/tags/v.*' || 'https://github.com/aRustyDev/plane/.github/workflows/woven-build.yml@refs/heads/main' }}
+          SIGNER_WORKFLOW: "aRustyDev/plane/.github/workflows/woven-build.yml"
+          SBOM_TYPE: "https://spdx.dev/Document/v2.3"
+          SLSA_TYPE: "https://slsa.dev/provenance/v1"
+          SBOM_PREDICATE: "https://spdx.dev/Document"
+        run: |
+          set -uo pipefail
+          rc=0
+          echo "Verifying attestations for $IMAGE_REF"
+          echo "  identity=$IDENTITY  issuer=$ISSUER"
+
+          echo "::group::cosign verify-attestation — SBOM (SPDX $SBOM_TYPE)"
+          cosign verify-attestation --type "$SBOM_TYPE" \
+            --certificate-identity-regexp "$IDENTITY" \
+            --certificate-oidc-issuer "$ISSUER" \
+            "$IMAGE_REF" > /dev/null || rc=1
+          echo "::endgroup::"
+
+          echo "::group::cosign verify-attestation — SLSA provenance ($SLSA_TYPE)"
+          cosign verify-attestation --type "$SLSA_TYPE" \
+            --certificate-identity-regexp "$IDENTITY" \
+            --certificate-oidc-issuer "$ISSUER" \
+            "$IMAGE_REF" > /dev/null || rc=1
+          echo "::endgroup::"
+
+          echo "::group::gh attestation verify — SLSA provenance (builder identity + source owner)"
+          gh attestation verify "oci://$IMAGE_REF" \
+            --owner aRustyDev \
+            --signer-workflow "$SIGNER_WORKFLOW" || rc=1
+          echo "::endgroup::"
+
+          echo "::group::gh attestation verify — SBOM (builder identity + source owner)"
+          gh attestation verify "oci://$IMAGE_REF" \
+            --owner aRustyDev \
+            --signer-workflow "$SIGNER_WORKFLOW" \
+            --predicate-type "$SBOM_PREDICATE" || rc=1
+          echo "::endgroup::"
+
+          if [ "$rc" -ne 0 ]; then
+            if [ "$GATE" = "true" ]; then
+              echo "::error::attestation verification FAILED for $IMAGE_REF"
+              exit 1
+            fi
+            echo "::warning::attestation verification failed for $IMAGE_REF (report-only: inherited proxy image)"
+          else
+            echo "attestation verification OK for $IMAGE_REF"
+          fi
 
       # ── Vulnerability scanning (plane-7fn.4.12 / .22) ─────────────────────────────────────
       # Division of labour, decided after triaging the baseline (which is ~95% inherited base-image
