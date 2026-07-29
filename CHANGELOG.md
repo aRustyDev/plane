@@ -7,6 +7,18 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). R
 managed by [release-please](https://github.com/googleapis/release-please); entries are grouped
 as Added / Changed / Deprecated / Removed / Fixed / Security.
 
+## [1.4.2](https://github.com/aRustyDev/plane/compare/v1.4.1...v1.4.2) (2026-07-29)
+
+
+### Fixed
+
+* **ci:** apply severity filter to trivy gate exit-code (limit-severities-for-sarif) ([#37](https://github.com/aRustyDev/plane/issues/37)) ([99de953](https://github.com/aRustyDev/plane/commit/99de953eaad3157816bde17d4254bd3ca6df29b7))
+* **ci:** run grype even when trivy gates; harden SARIF uploads ([#35](https://github.com/aRustyDev/plane/issues/35)) ([f2b606e](https://github.com/aRustyDev/plane/commit/f2b606e48da1539e607c316d1d54cb8ea1d3e6d8))
+* **ci:** unblock Dependabot PRs (format latent file + ignore override-pinned deps) ([#26](https://github.com/aRustyDev/plane/issues/26)) ([1cbe481](https://github.com/aRustyDev/plane/commit/1cbe4810365373c4350b9b93bf950957a656b27d))
+* **deps:** patch vulnerable library deps to clear the release gate ([#38](https://github.com/aRustyDev/plane/issues/38)) ([5db5d89](https://github.com/aRustyDev/plane/commit/5db5d89395579fcf432afab0737adbd701f0dd33))
+* **deps:** pin core prosemirror packages to dedupe editor build ([#28](https://github.com/aRustyDev/plane/issues/28)) ([1c6f578](https://github.com/aRustyDev/plane/commit/1c6f578623f5f43835e776094d7769412dbeafac))
+* **deps:** regenerate corrupted pnpm-lock.yaml (duplicate mapping key) ([#33](https://github.com/aRustyDev/plane/issues/33)) ([3647f11](https://github.com/aRustyDev/plane/commit/3647f11a89b829624d348a44447c8b890fb0ef40))
+
 ## [1.4.1](https://github.com/aRustyDev/plane/compare/v1.4.0...v1.4.1) (2026-07-28)
 
 
