@@ -205,28 +205,46 @@ jobs:
           echo "Verifying attestations for $IMAGE_REF"
           echo "  identity=$IDENTITY  issuer=$ISSUER"
 
+          # The verify step runs seconds after attest-*; GHCR's OCI-1.1 referrer index and the Rekor
+          # tlog inclusion proof can lag by up to ~a minute, so a naive verify hits a transient
+          # "no matching attestations" (plane-7fn.4.27 — observed failing every gate:true image on
+          # release v1.4.2 while the images were in fact correctly signed+attested). retry() absorbs
+          # that lag: re-run up to $MAX times with $DELAY backoff, succeed on the first pass, and only
+          # surface the error on the final failure — so a genuine mismatch still fails the gate.
+          MAX=6; DELAY=15
+          retry() {  # retry <label> <cmd...>
+            local label=$1; shift
+            local n=1 out
+            while true; do
+              if out=$("$@" 2>&1); then return 0; fi
+              if [ "$n" -ge "$MAX" ]; then echo "$out" | tail -5; return 1; fi
+              echo "  [$label] attempt $n/$MAX: attestation not queryable yet, waiting ${DELAY}s…"
+              sleep "$DELAY"; n=$((n + 1))
+            done
+          }
+
           echo "::group::cosign verify-attestation — SBOM (SPDX $SBOM_TYPE)"
-          cosign verify-attestation --type "$SBOM_TYPE" \
+          retry "cosign SBOM" cosign verify-attestation --type "$SBOM_TYPE" \
             --certificate-identity-regexp "$IDENTITY" \
             --certificate-oidc-issuer "$ISSUER" \
-            "$IMAGE_REF" > /dev/null || rc=1
+            "$IMAGE_REF" || rc=1
           echo "::endgroup::"
 
           echo "::group::cosign verify-attestation — SLSA provenance ($SLSA_TYPE)"
-          cosign verify-attestation --type "$SLSA_TYPE" \
+          retry "cosign SLSA" cosign verify-attestation --type "$SLSA_TYPE" \
             --certificate-identity-regexp "$IDENTITY" \
             --certificate-oidc-issuer "$ISSUER" \
-            "$IMAGE_REF" > /dev/null || rc=1
+            "$IMAGE_REF" || rc=1
           echo "::endgroup::"
 
           echo "::group::gh attestation verify — SLSA provenance (builder identity + source owner)"
-          gh attestation verify "oci://$IMAGE_REF" \
+          retry "gh SLSA" gh attestation verify "oci://$IMAGE_REF" \
             --owner aRustyDev \
             --signer-workflow "$SIGNER_WORKFLOW" || rc=1
           echo "::endgroup::"
 
           echo "::group::gh attestation verify — SBOM (builder identity + source owner)"
-          gh attestation verify "oci://$IMAGE_REF" \
+          retry "gh SBOM" gh attestation verify "oci://$IMAGE_REF" \
             --owner aRustyDev \
             --signer-workflow "$SIGNER_WORKFLOW" \
             --predicate-type "$SBOM_PREDICATE" || rc=1
