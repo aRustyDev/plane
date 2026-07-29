@@ -201,63 +201,74 @@ jobs:
           SBOM_PREDICATE: "https://spdx.dev/Document"
         run: |
           set -uo pipefail
-          rc=0
           echo "Verifying attestations for $IMAGE_REF"
           echo "  identity=$IDENTITY  issuer=$ISSUER"
 
-          # The verify step runs seconds after attest-*; GHCR's OCI-1.1 referrer index and the Rekor
-          # tlog inclusion proof can lag by up to ~a minute, so a naive verify hits a transient
-          # "no matching attestations" (plane-7fn.4.27 — observed failing every gate:true image on
-          # release v1.4.2 while the images were in fact correctly signed+attested). retry() absorbs
-          # that lag: re-run up to $MAX times with $DELAY backoff, succeed on the first pass, and only
-          # surface the error on the final failure — so a genuine mismatch still fails the gate.
-          MAX=6; DELAY=15
-          retry() {  # retry <label> <cmd...>
-            local label=$1; shift
+          # retry <max> <delay> <label> <cmd...>: re-run a verify command up to <max> times with
+          # <delay>s backoff; succeed on the first pass, surface the error only on the final attempt.
+          retry() {
+            local max=$1 delay=$2 label=$3; shift 3
             local n=1 out
             while true; do
               if out=$("$@" 2>&1); then return 0; fi
-              if [ "$n" -ge "$MAX" ]; then echo "$out" | tail -5; return 1; fi
-              echo "  [$label] attempt $n/$MAX: attestation not queryable yet, waiting ${DELAY}s…"
-              sleep "$DELAY"; n=$((n + 1))
+              if [ "$n" -ge "$max" ]; then echo "$out" | tail -5; return 1; fi
+              echo "  [$label] attempt $n/$max: not confirmed yet, waiting ${delay}s…"
+              sleep "$delay"; n=$((n + 1))
             done
           }
 
-          echo "::group::cosign verify-attestation — SBOM (SPDX $SBOM_TYPE)"
-          retry "cosign SBOM" cosign verify-attestation --type "$SBOM_TYPE" \
-            --certificate-identity-regexp "$IDENTITY" \
-            --certificate-oidc-issuer "$ISSUER" \
-            "$IMAGE_REF" || rc=1
-          echo "::endgroup::"
-
-          echo "::group::cosign verify-attestation — SLSA provenance ($SLSA_TYPE)"
-          retry "cosign SLSA" cosign verify-attestation --type "$SLSA_TYPE" \
-            --certificate-identity-regexp "$IDENTITY" \
-            --certificate-oidc-issuer "$ISSUER" \
-            "$IMAGE_REF" || rc=1
-          echo "::endgroup::"
-
-          echo "::group::gh attestation verify — SLSA provenance (builder identity + source owner)"
-          retry "gh SLSA" gh attestation verify "oci://$IMAGE_REF" \
+          # ── GATING: gh attestation verify ────────────────────────────────────────────────────
+          # gh queries GitHub's attestation API, which attest-* writes synchronously, so it is
+          # available immediately post-build — this is the AUTHORITATIVE gate. It cryptographically
+          # verifies the sigstore bundle and asserts the builder-workflow identity (--signer-workflow)
+          # + source owner (--owner), for BOTH the SLSA provenance and the SBOM. (Small retry only as
+          # a safety net.)
+          gate_rc=0
+          echo "::group::gh attestation verify — SLSA provenance (GATING)"
+          retry 6 15 "gh SLSA" gh attestation verify "oci://$IMAGE_REF" \
             --owner aRustyDev \
-            --signer-workflow "$SIGNER_WORKFLOW" || rc=1
+            --signer-workflow "$SIGNER_WORKFLOW" || gate_rc=1
           echo "::endgroup::"
 
-          echo "::group::gh attestation verify — SBOM (builder identity + source owner)"
-          retry "gh SBOM" gh attestation verify "oci://$IMAGE_REF" \
+          echo "::group::gh attestation verify — SBOM (GATING)"
+          retry 6 15 "gh SBOM" gh attestation verify "oci://$IMAGE_REF" \
             --owner aRustyDev \
             --signer-workflow "$SIGNER_WORKFLOW" \
-            --predicate-type "$SBOM_PREDICATE" || rc=1
+            --predicate-type "$SBOM_PREDICATE" || gate_rc=1
           echo "::endgroup::"
 
-          if [ "$rc" -ne 0 ]; then
+          # ── ADVISORY: cosign verify-attestation ──────────────────────────────────────────────
+          # cosign reads the OCI-1.1 referrer index, which on GHCR is eventually-consistent and can
+          # lag several minutes post-push (plane-7fn.4.27) — so it must NOT block a release on
+          # propagation. Report-only second signal here (short retry to catch fast propagation).
+          # Making cosign a true gate (deterministic referrer readiness) is tracked in plane-7fn.4.28.
+          adv_rc=0
+          echo "::group::cosign verify-attestation — SBOM (advisory)"
+          retry 2 15 "cosign SBOM" cosign verify-attestation --type "$SBOM_TYPE" \
+            --certificate-identity-regexp "$IDENTITY" \
+            --certificate-oidc-issuer "$ISSUER" \
+            "$IMAGE_REF" || adv_rc=1
+          echo "::endgroup::"
+
+          echo "::group::cosign verify-attestation — SLSA provenance (advisory)"
+          retry 2 15 "cosign SLSA" cosign verify-attestation --type "$SLSA_TYPE" \
+            --certificate-identity-regexp "$IDENTITY" \
+            --certificate-oidc-issuer "$ISSUER" \
+            "$IMAGE_REF" || adv_rc=1
+          echo "::endgroup::"
+          if [ "$adv_rc" -ne 0 ]; then
+            echo "::warning::cosign verify-attestation did not confirm in-CI (OCI referrer propagation lag, plane-7fn.4.27); gh attestation verify is authoritative. cosign gating tracked in plane-7fn.4.28"
+          fi
+
+          # ── Gate decision (gh attestation verify is authoritative) ────────────────────────────
+          if [ "$gate_rc" -ne 0 ]; then
             if [ "$GATE" = "true" ]; then
               echo "::error::attestation verification FAILED for $IMAGE_REF"
               exit 1
             fi
             echo "::warning::attestation verification failed for $IMAGE_REF (report-only: inherited proxy image)"
           else
-            echo "attestation verification OK for $IMAGE_REF"
+            echo "attestation verification OK for $IMAGE_REF (gh gating; cosign advisory)"
           fi
 
       # ── Vulnerability scanning (plane-7fn.4.12 / .22) ─────────────────────────────────────
