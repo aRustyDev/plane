@@ -7,6 +7,15 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). R
 managed by [release-please](https://github.com/googleapis/release-please); entries are grouped
 as Added / Changed / Deprecated / Removed / Fixed / Security.
 
+## [1.4.3](https://github.com/aRustyDev/plane/compare/v1.4.2...v1.4.3) (2026-08-05)
+
+
+### Fixed
+
+* **ci:** gate attestation verify on gh, make cosign advisory ([#45](https://github.com/aRustyDev/plane/issues/45)) ([8d0938f](https://github.com/aRustyDev/plane/commit/8d0938f953ef2c81f3ceb9dcaf3a7c8cf6df8975))
+* **ci:** retry attestation verify to absorb attestation-propagation lag ([#43](https://github.com/aRustyDev/plane/issues/43)) ([d0829b7](https://github.com/aRustyDev/plane/commit/d0829b7115f9249e4a3d256827d3583921c56f72))
+* **storage:** support presigned PUT uploads for object stores without POST ([#47](https://github.com/aRustyDev/plane/issues/47)) ([bf5ff8d](https://github.com/aRustyDev/plane/commit/bf5ff8d52756a95535a553f5049ab1152d06aa08))
+
 ## [1.4.2](https://github.com/aRustyDev/plane/compare/v1.4.1...v1.4.2) (2026-07-29)
 
 
