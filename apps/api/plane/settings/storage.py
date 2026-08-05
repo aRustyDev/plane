@@ -35,6 +35,16 @@ class S3Storage(S3Boto3Storage):
         self.aws_s3_endpoint_url = os.environ.get("AWS_S3_ENDPOINT_URL") or os.environ.get("MINIO_ENDPOINT_URL")
         # Use the SIGNED_URL_EXPIRATION environment variable for the expiration time (default: 3600 seconds)
         self.signed_url_expiration = int(os.environ.get("SIGNED_URL_EXPIRATION", "3600"))
+        # Which presigned upload flavour the browser should use: "post" (default) or "put".
+        #
+        # Default stays "post" because that is what AWS S3 and MinIO implement and what every
+        # existing deployment already uses. Set it to "put" for object stores that do NOT
+        # implement presigned POST — notably Cloudflare R2, which answers a presigned POST with
+        # `501 NotImplemented: Presigned post requests are not yet implemented`, so browser
+        # uploads can never land while server-side flows keep working.
+        self.upload_method = os.environ.get("AWS_S3_UPLOAD_METHOD", "post").strip().lower()
+        if self.upload_method not in ("post", "put"):
+            self.upload_method = "post"
 
         if os.environ.get("USE_MINIO") == "1":
             # Determine protocol based on environment variable
@@ -96,7 +106,68 @@ class S3Storage(S3Boto3Storage):
             print(f"Error generating presigned POST URL: {e}")
             return None
 
+        response["method"] = "POST"
         return response
+
+    def generate_presigned_put(self, object_name, file_type, file_size, expiration=None):
+        """Generate a presigned PUT URL to upload an S3 object.
+
+        For object stores without presigned POST support (Cloudflare R2). Returns the same
+        envelope as generate_presigned_post so callers and the client stay uniform:
+        `url` plus an empty `fields`, with the headers the client must send in `headers`.
+
+        The constraints the POST policy expressed as `conditions` are preserved by SIGNING them
+        as headers — `Content-Type` and `Content-Length` land in SignedHeaders, so the store
+        rejects any mismatch with 403 SignatureDoesNotMatch. This is STRICTER than the POST
+        policy it replaces: `content-length-range` allowed anything in [1, file_size], whereas a
+        signed Content-Length pins the size exactly, and the key is part of the signed URL rather
+        than a forgeable form field.
+        """
+        if expiration is None:
+            expiration = self.signed_url_expiration
+
+        # A presigned PUT addresses one concrete key, so the POST-only `${filename}` template
+        # cannot be expressed. No caller uses it, but fail loudly rather than silently upload to
+        # a key with a literal "${filename}" in it.
+        if object_name.startswith("${filename}"):
+            raise ValueError("generate_presigned_put requires a concrete object key; '${filename}' is POST-only")
+
+        try:
+            url = self.s3_client.generate_presigned_url(
+                "put_object",
+                Params={
+                    "Bucket": self.aws_storage_bucket_name,
+                    "Key": object_name,
+                    "ContentType": file_type,
+                    "ContentLength": file_size,
+                },
+                ExpiresIn=expiration,
+            )
+        except ClientError as e:
+            print(f"Error generating presigned PUT URL: {e}")
+            return None
+
+        return {
+            "method": "PUT",
+            "url": url,
+            # Kept (empty) so the response shape is stable for clients that read `fields`.
+            "fields": {},
+            "headers": {"Content-Type": file_type, "Content-Length": str(file_size)},
+        }
+
+    def generate_presigned_upload(self, object_name, file_type, file_size, expiration=None):
+        """Generate a presigned browser upload, POST or PUT per AWS_S3_UPLOAD_METHOD.
+
+        This is what the asset views call. The client dispatches on the returned `method`, so
+        switching an install between S3/MinIO and R2 needs no client-side change.
+        """
+        if self.upload_method == "put":
+            return self.generate_presigned_put(
+                object_name=object_name, file_type=file_type, file_size=file_size, expiration=expiration
+            )
+        return self.generate_presigned_post(
+            object_name=object_name, file_type=file_type, file_size=file_size, expiration=expiration
+        )
 
     def _get_content_disposition(self, disposition, filename=None):
         """Helper method to generate Content-Disposition header value"""

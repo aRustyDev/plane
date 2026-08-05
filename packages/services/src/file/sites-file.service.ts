@@ -11,7 +11,12 @@ import type { TFileEntityInfo, TFileSignedURLResponse } from "@plane/types";
 import { FileUploadService } from "./file-upload.service";
 // helpers
 import { FileService } from "./file.service";
-import { generateFileUploadPayload, getAssetIdFromUrl, getFileMetaDataForUpload } from "./helper";
+import {
+  generateFileUploadPayload,
+  getAssetIdFromUrl,
+  getFileMetaDataForUpload,
+  getFileUploadRequestOptions,
+} from "./helper";
 
 /**
  * Service class for managing file operations within plane sites application.
@@ -88,7 +93,11 @@ export class SitesFileService extends FileService {
       .then(async (response) => {
         const signedURLResponse: TFileSignedURLResponse = response?.data;
         const fileUploadPayload = generateFileUploadPayload(signedURLResponse, file);
-        await this.fileUploadService.uploadFile(signedURLResponse.upload_data.url, fileUploadPayload);
+        await this.fileUploadService.uploadFile(
+          signedURLResponse.upload_data.url,
+          fileUploadPayload,
+          getFileUploadRequestOptions(signedURLResponse)
+        );
         await this.updateAssetUploadStatus(anchor, signedURLResponse.asset_id);
         return signedURLResponse;
       })
