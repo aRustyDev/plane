@@ -7,7 +7,7 @@
 // external imports
 import { fileTypeFromBuffer } from "file-type";
 // plane imports
-import type { TFileMetaDataLite, TFileSignedURLResponse } from "@plane/types";
+import type { TFileMetaDataLite, TFileSignedURLResponse, TFileUploadRequestOptions } from "@plane/types";
 import { DANGEROUS_EXTENSIONS } from "@plane/constants";
 
 /**
@@ -51,15 +51,42 @@ const validateFilename = (filename: string): string | null => {
 
 /**
  * @description from the provided signed URL response, generate a payload to be used to upload the file
+ *
+ * POST (S3, MinIO) wants a multipart form carrying the policy fields; PUT (R2, which has no
+ * presigned POST) wants the raw file as the body, with the signed headers supplied separately by
+ * {@link getFileUploadRequestOptions}. `method` is absent on older servers, which are always POST.
+ *
  * @param {TFileSignedURLResponse} signedURLResponse
  * @param {File} file
- * @returns {FormData} file upload request payload
+ * @returns {FormData | File} file upload request payload
  */
-export const generateFileUploadPayload = (signedURLResponse: TFileSignedURLResponse, file: File): FormData => {
+export const generateFileUploadPayload = (signedURLResponse: TFileSignedURLResponse, file: File): FormData | File => {
+  if (signedURLResponse.upload_data.method === "PUT") return file;
   const formData = new FormData();
-  Object.entries(signedURLResponse.upload_data.fields).forEach(([key, value]) => formData.append(key, value));
+  Object.entries(signedURLResponse.upload_data.fields ?? {}).forEach(([key, value]) =>
+    formData.append(key, value as string)
+  );
   formData.append("file", file);
   return formData;
+};
+
+/**
+ * @description the method and headers the upload request must use for this signed URL
+ *
+ * For PUT the headers were SIGNED (Content-Type and Content-Length are in SignedHeaders), so they
+ * must be sent verbatim — a mismatch is rejected with 403 SignatureDoesNotMatch rather than being
+ * silently coerced. Content-Length is omitted deliberately: browsers set it from the body and
+ * forbid setting it from script, and the body is the exact file that was signed for.
+ *
+ * @param {TFileSignedURLResponse} signedURLResponse
+ * @returns {TFileUploadRequestOptions}
+ */
+export const getFileUploadRequestOptions = (signedURLResponse: TFileSignedURLResponse): TFileUploadRequestOptions => {
+  if (signedURLResponse.upload_data.method === "PUT") {
+    const { "Content-Length": _contentLength, ...sendable } = signedURLResponse.upload_data.headers ?? {};
+    return { method: "PUT", headers: sendable };
+  }
+  return { method: "POST", headers: { "Content-Type": "multipart/form-data" } };
 };
 
 /**

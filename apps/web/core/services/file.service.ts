@@ -7,7 +7,7 @@
 import type { AxiosRequestConfig } from "axios";
 // plane types
 import { API_BASE_URL } from "@plane/constants";
-import { getFileMetaDataForUpload, generateFileUploadPayload } from "@plane/services";
+import { getFileMetaDataForUpload, generateFileUploadPayload, getFileUploadRequestOptions } from "@plane/services";
 import type { EFileAssetType, TFileEntityInfo, TFileSignedURLResponse } from "@plane/types";
 import { getAssetIdFromUrl } from "@plane/utils";
 // helpers
@@ -86,6 +86,7 @@ export class FileService extends APIService {
         await this.fileUploadService.uploadFile(
           signedURLResponse.upload_data.url,
           fileUploadPayload,
+          getFileUploadRequestOptions(signedURLResponse),
           uploadProgressHandler
         );
         await this.updateWorkspaceAssetUploadStatus(workspaceSlug.toString(), signedURLResponse.asset_id);
@@ -163,6 +164,7 @@ export class FileService extends APIService {
         await this.fileUploadService.uploadFile(
           signedURLResponse.upload_data.url,
           fileUploadPayload,
+          getFileUploadRequestOptions(signedURLResponse),
           uploadProgressHandler
         );
         await this.updateProjectAssetUploadStatus(workspaceSlug, projectId, signedURLResponse.asset_id);
@@ -190,7 +192,11 @@ export class FileService extends APIService {
       .then(async (response) => {
         const signedURLResponse: TFileSignedURLResponse = response?.data;
         const fileUploadPayload = generateFileUploadPayload(signedURLResponse, file);
-        await this.fileUploadService.uploadFile(signedURLResponse.upload_data.url, fileUploadPayload);
+        await this.fileUploadService.uploadFile(
+          signedURLResponse.upload_data.url,
+          fileUploadPayload,
+          getFileUploadRequestOptions(signedURLResponse)
+        );
         await this.updateUserAssetUploadStatus(signedURLResponse.asset_id);
         return signedURLResponse;
       })
