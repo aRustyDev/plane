@@ -90,7 +90,7 @@
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
-    "postcss": "^8.4.38",
+    "postcss": "^8.5.23",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   },
