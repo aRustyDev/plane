@@ -2,11 +2,7 @@
 
 Date: 2026-10-18. Spike: `spikes/0006-editor-conversions-rust.md` (bead `plane-byd.6`). Code: thrust worktree
 `/Users/asmith/repos/arustydev/thrust-wt/spike-0006-editor-conversions`, branch `feat/spike-0006-editor-conversions`
-(local only, nothing pushed). Commits: `60c86b9` (Rust model + oracle corpus). A second commit (sanitiser, both
-Workers, fuzz, benchmarks, probes) is **staged but not committed**: signing failed with `1Password: failed to fill
-whole buffer` / `agent returned an error` (the 1Password SSH agent is locked; not a repo problem). Signing was not
-bypassed. Run `git -C <worktree> commit` after unlocking the app (suggested subject: `feat(spike): sanitiser, workerd
-Workers for both options, differential fuzz and nh3/ammonia evidence`, footer `Refs: plane-byd.6`).
+(pushed to `aRustyDev/thrust`; draft PR [#18](https://github.com/aRustyDev/thrust/pull/18), stacked on spike 0001's [#17](https://github.com/aRustyDev/thrust/pull/17) and conflicting with it in `Cargo.lock`). Commits, both signed: `60c86b9` (Rust model + oracle corpus) and `59753e0` (sanitiser, both Workers, fuzz, benchmarks, probes).
 
 Verification tags: **[tested]** I ran it and the command is in §13 · **[doc]** a source file or page I read (path
 given) · **[inferred]** reasoning, not observed · **[unverified]** not checked. `[tested]` always means "on this
