@@ -345,7 +345,7 @@ Every latency figure comes from **one vantage point** (a laptop on the US east c
 
 ### 10.1 Setup used, and where it departed from the runbook
 
-- **Endpoint.** Woven account `4d90c2d3…`, `https://thrust-spike-worker.woven-4d9.workers.dev`. Every resource is `thrust-spike-`-prefixed; the ledger is §10.7.
+- **Endpoint.** Woven account `<cloudflare-account-id>`, `https://thrust-spike-worker.woven-4d9.workers.dev`. Every resource is `thrust-spike-`-prefixed; the ledger is §10.7.
 - **Credentials.** The `thrust-spikes` API token ran Workers, Hyperdrive, Queues, Workflows and Durable Objects. **Its KV reads returned 401 and its R2 and Secrets Store reads 403, probed twice, also after the owner updated it**,
   so KV, R2 and the Secrets Store secret were created and deleted with the owner's wrangler OAuth login (the split the earlier smoke test used). The owner should know the token as issued cannot do those three.
 - **Database.** `thrust-pg-dev` (CNPG on woven-o11y, ADR-0094) through a NEW Hyperdrive config `thrust-spike-pg`: the dev VPC service, role `pr_1001` created by the repo's `pr-schema.sh` (connection limit 8),
